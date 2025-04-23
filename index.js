@@ -1,45 +1,64 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { exec } = require('child_process');
 
-// Ganti dengan token bot Telegram Anda
 const token = '7729532380:AAHQgIrbq7r6T23hhVU0zuE8UmsiEls6x-E';
 
-// Inisialisasi bot dengan token
 const bot = new TelegramBot(token, { polling: true });
 
-// Fungsi untuk mencatat aktivitas penggunaan bot di console log
 function logActivity(msg) {
   const user = msg.from;
   const chat = msg.chat;
   const command = msg.text.toLowerCase();
 
-  console.log(`Aktivitas Penggunaan Bot Telegram`);
+  console.log(`Telegram Bot Usage Activity`);
   console.log(`• User ID: ${user.id}`);
-  console.log(`• Username: ${user.username || 'Tidak ada'}`);
+  console.log(`• Username: ${user.username || 'None'}`);
   console.log(`• Chat ID: ${chat.id}`);
-  console.log(`• Perintah: ${command}`);
+  console.log(`• Command: ${command}`);
 }
 
-// Event listener untuk pesan dari pengguna
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
   const command = msg.text.toLowerCase();
 
-  // Mencatat aktivitas penggunaan bot di console log
   logActivity(msg);
 
-  // Menanggapi perintah /mix
-  if (command.startsWith('/mix')) {
-    // Mengekstrak argumen dari pesan
+  if (command === '/start') {
+    const now = new Date().toLocaleString();
+    const welcomeMsg = `
+Welcome to the Bot!
+Date & Time: ${now}
+
+Menu:
+- /mix [url] [time] [thread] [rate]
+- /show
+- /help
+    `;
+    bot.sendMessage(chatId, welcomeMsg);
+
+  } else if (command === '/help') {
+    const helpMessage = `
+Available Commands:
+/mix [url] [time] [thread] [rate] - Start mix.js with given parameters.
+/show - Show author and current real-time info.
+/help - Show this help message.
+/start - Start bot, show menu and time.
+    `;
+    bot.sendMessage(chatId, helpMessage);
+
+  } else if (command === '/show') {
+    const author = "Made by @Ricozhen";
+    const now = new Date().toLocaleString();
+    bot.sendMessage(chatId, `${author}\nReal-Time: ${now}`);
+
+  } else if (command.startsWith('/mix')) {
     const args = command.split(' ');
     const url = args[1];
     const time = args[2];
     const thread = args[3];
     const rate = args[4];
 
-    // Memeriksa apakah format pesan benar
     if (args.length === 5 && url && time && thread && rate) {
-      // Menjalankan file mix.js dengan argumen yang diberikan
       exec(`node mix.js ${url} ${time} ${thread} ${rate}`, (error, stdout, stderr) => {
         if (error) {
           console.error(`Error: ${error.message}`);
@@ -51,13 +70,11 @@ bot.on('message', (msg) => {
           bot.sendMessage(chatId, 'Successful');
           return;
         }
-        // Menampilkan output stdout jika berhasil
         console.log(`stdout: ${stdout}`);
-        bot.sendMessage(chatId, 'Proses telah dimulai.');
+        bot.sendMessage(chatId, 'Process has started.');
       });
     } else {
-      // Memberi tahu pengguna bahwa format pesan tidak benar
-      bot.sendMessage(chatId, 'Format pesan tidak benar. Gunakan format: /mix [url] [time] [thread] [rate]');
+      bot.sendMessage(chatId, 'Incorrect message format. Use: /mix [url] [time] [thread] [rate]');
     }
   }
 });
